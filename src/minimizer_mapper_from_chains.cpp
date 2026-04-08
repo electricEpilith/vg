@@ -11,6 +11,7 @@
 #include "crash.hpp"
 #include "path_subgraph.hpp"
 #include "multipath_alignment.hpp"
+#include "theseus_interop.hpp"
 #include "split_strand_graph.hpp"
 #include "subgraph.hpp"
 #include "statistics.hpp"
@@ -3117,6 +3118,68 @@ Alignment MinimizerMapper::find_chain_alignment(
     return result;
 }
 
+vg::Alignment MinimizerMapper::find_chain_alignment_theseus(
+    const vg::Alignment& aln,
+    const VectorView<algorithms::Anchor>& to_chain,
+    const std::vector<size_t>& chain,
+    aligner_stats_t* stats
+) const {
+    
+    if (chain.empty()) {
+        throw ChainAlignmentFailedError("Cannot find an alignment for an empty chain!");
+    }
+
+    //confusingly only needed for getting penalty values
+    const Aligner& aligner = *get_regular_aligner();
+    
+    string query_seq = aln.sequence();
+    string_view query_view(query_seq);
+    HandleGraphTheseusAdapter theseus_adapter(this->gbwt_graph);
+    theseus::Penalties theseus_penalties(
+        aligner.match,
+        aligner.mismatch,
+        aligner.gap_open,
+        aligner.gap_extension
+    );
+
+    bool is_msa = false;
+    theseus::TheseusAlignerImpl actual_aligner(
+        theseus_penalties,
+        theseus_adapter.take_graph(), //only call take_graph() once, since it moves the graph out of the adapter
+        is_msa
+    );
+
+    const algorithms::Anchor start_anchor = to_chain[chain.front()];
+    const pos_t start_pos = start_anchor.graph_start();
+    const vg::id_t start_id = id(start_pos);
+    const handle_t start_handle = this->gbwt_graph.get_handle(start_id);
+    string start_handle_name = theseus_adapter.handle_name(this->gbwt_graph, start_handle);
+    theseus::Alignment theseus_alignment = actual_aligner.align(
+        query_view,
+        start_handle_name,
+        start_anchor.start_hint_offset()
+    );
+
+    // Convert to a vg Alignment.
+    vg::Alignment result = vg_alignment_from_theseus_alignment(
+        theseus_alignment,
+        query_seq,
+        theseus_adapter,
+        this->gbwt_graph
+    );
+    /*
+    // Simplify the path but keep internal deletions; we want to assert the
+    // read deleted relative to some graph, and avoid jumps along nonexistent
+    // edges.
+    *result.mutable_path() = std::move(simplify(composed_path, false));
+    result.set_score(composed_score);
+    if (!result.sequence().empty()) {
+        result.set_identity(identity(result.path()));
+    }
+    */
+    return result;
+}
+
 void MinimizerMapper::wfa_alignment_to_alignment(const WFAAlignment& wfa_alignment, Alignment& alignment) const {
     *(alignment.mutable_path()) = wfa_alignment.to_path(this->gbwt_graph, alignment.sequence());
     alignment.set_score(wfa_alignment.score);
@@ -3125,25 +3188,25 @@ void MinimizerMapper::wfa_alignment_to_alignment(const WFAAlignment& wfa_alignme
     }
 }
 
-void MinimizerMapper::with_dagified_local_graph(const pos_t& left_anchor, const pos_t& right_anchor, size_t max_path_length, const HandleGraph& graph, const std::function<void(DeletableHandleGraph&, const handle_t&, const handle_t&, const std::function<std::pair<nid_t, bool>(const handle_t&)>&)>& callback) {
-    
-    if (is_empty(left_anchor) && is_empty(right_anchor)) {
-        throw ChainAlignmentFailedError("Cannot align sequence between two unset positions");
-    }
-    
-    // We need to get the graph to align to.
+bdsg::HashGraph MinimizerMapper::get_local_graph(
+    const pos_t& left_anchor,
+    const pos_t& right_anchor,
+    size_t max_path_length,
+    const HandleGraph& graph,
+    unordered_map<id_t, id_t>& local_to_base
+) {
     bdsg::HashGraph local_graph;
-    unordered_map<id_t, id_t> local_to_base;
+    
     if (!is_empty(left_anchor) && !is_empty(right_anchor)) {
         // We want a graph actually between two positions.
         // Enforce strict max length to avoid extra tips.
-        local_to_base = algorithms::extract_connecting_graph(
+        local_to_base = std::move(algorithms::extract_connecting_graph(
             &graph,
             &local_graph,
             max_path_length,
             left_anchor, right_anchor,
             true
-        );
+        ));
 
         if (local_to_base.empty()) {
             // A possible result is that the one anchor is not reachable from
@@ -3161,31 +3224,45 @@ void MinimizerMapper::with_dagified_local_graph(const pos_t& left_anchor, const 
         }
     } else if (!is_empty(left_anchor)) {
         // We only have the left anchor
-        local_to_base = algorithms::extract_extending_graph(
+        local_to_base = std::move(algorithms::extract_extending_graph(
             &graph,
             &local_graph,
             max_path_length,
             left_anchor,
             false,
             false
-        );
+        ));
     } else {
         // We only have the right anchor
-        local_to_base = algorithms::extract_extending_graph(
+        local_to_base = std::move(algorithms::extract_extending_graph(
             &graph,
             &local_graph,
             max_path_length,
             right_anchor,
             true,
             false
-        );
+        ));
     }
 
 #ifdef debug
     std::cerr << "Local graph:" << std::endl;
     dump_debug_graph(local_graph);
 #endif
+
+    return local_graph;
+}
+
+void MinimizerMapper::with_dagified_local_graph(const pos_t& left_anchor, const pos_t& right_anchor, size_t max_path_length, const HandleGraph& graph, const std::function<void(DeletableHandleGraph&, const handle_t&, const handle_t&, const std::function<std::pair<nid_t, bool>(const handle_t&)>&)>& callback) {
     
+    if (is_empty(left_anchor) && is_empty(right_anchor)) {
+        throw ChainAlignmentFailedError("Cannot align sequence between two unset positions");
+    }
+    
+    // We need to get the graph to align to.
+    unordered_map<id_t, id_t> local_to_base;
+    bdsg::HashGraph local_graph = get_local_graph(left_anchor, right_anchor, max_path_length, graph, local_to_base);
+
+        
     // To find the anchoring nodes in the extracted graph, we need to scan local_to_base.
     nid_t local_left_anchor_id = 0;
     nid_t local_right_anchor_id = 0;

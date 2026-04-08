@@ -917,6 +917,11 @@ protected:
      * If given base processing stats for bases and for time, adds aligned bases and consumed time to them.
      */
     Alignment find_chain_alignment(const Alignment& aln, const VectorView<algorithms::Anchor>& to_chain, const std::vector<size_t>& chain, aligner_stats_t* stats = nullptr) const;
+
+    /**
+     * Same as above, but with the Theseus alignment algorithm
+     */
+    Alignment find_chain_alignment_theseus(const Alignment& aln, const VectorView<algorithms::Anchor>& to_chain, const std::vector<size_t>& chain, aligner_stats_t* stats = nullptr) const;
      
      /**
      * Operating on the given input alignment, align the tails dangling off the
@@ -1035,6 +1040,11 @@ protected:
      */
     void wfa_alignment_to_alignment(const WFAAlignment& wfa_alignment, Alignment& alignment) const;
    
+    /** 
+     * Get the subgraph to align to.
+     */
+    static bdsg::HashGraph get_local_graph(const pos_t& left_anchor, const pos_t& right_anchor, size_t max_path_length, const HandleGraph& graph, unordered_map<id_t, id_t>& local_to_base);
+
     /**
      * Clip out the part of the graph between the given positions (left facing
      * into the region to be extracted and right facing out), and dagify it
