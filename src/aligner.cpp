@@ -1378,14 +1378,12 @@ int8_t* AlignerClient::parse_matrix(istream& matrix_stream) {
     crash_unless(matrix != nullptr);
     for (size_t i = 0; i < 16; i++) {
         if (!matrix_stream.good()) {
-            std::cerr << "error: vg Aligner::parse_matrix requires a 4x4 whitespace separated integer matrix\n";
-            throw "";
+            throw std::domain_error("error: vg Aligner::parse_matrix requires a 4x4 whitespace separated integer matrix");
         }
         int score;
         matrix_stream >> score;
         if (score > 127 || score < -127) {
-            std::cerr << "error: vg Aligner::parse_matrix requires values in the range [-127,127]\n";
-            throw "";
+            throw std::domain_error("error: vg Aligner::parse_matrix requires values in the range [-127,127]");
         }
         matrix[i] = score;
     }

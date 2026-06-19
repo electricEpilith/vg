@@ -31,7 +31,7 @@ namespace vg {
         *this = other;
     }
 
-    multipath_alignment_t::multipath_alignment_t(multipath_alignment_t&& other) {
+    multipath_alignment_t::multipath_alignment_t(multipath_alignment_t&& other) noexcept {
         *this = std::move(other);
     }
 
@@ -64,7 +64,7 @@ namespace vg {
         return *this;
     }
 
-    multipath_alignment_t& multipath_alignment_t::operator=(multipath_alignment_t&& other) {
+    multipath_alignment_t& multipath_alignment_t::operator=(multipath_alignment_t&& other) noexcept {
         if (this != &other) {
             _sequence = std::move(other._sequence);
             _quality = std::move(other._quality);
@@ -2712,12 +2712,11 @@ namespace vg {
     }
 
     bool is_supplementary(const multipath_alignment_t& multipath_aln) {
-        if (!multipath_aln.has_annotation("supplementary")) {
+        auto [type, value] = multipath_aln.get_annotation("supplementary");
+        if (value == nullptr) {
             return false;
         }
-        else {
-            return *((bool*) multipath_aln.get_annotation("supplementary").second);
-        }
+        return *((bool*) value);
     }
 
     vector<tuple<int64_t, int64_t, int64_t, int64_t>>

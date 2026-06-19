@@ -1460,6 +1460,9 @@ struct WFANode {
     // Points on the wavefronts are indexed by score, diagonal.
     std::array<hash_map<WFAPoint::key_type, WFAPoint::value_type>, 3> wavefronts;
 
+    WFANode(WFANode&&) noexcept = default;
+    WFANode& operator=(WFANode&&) noexcept = default;
+
     WFANode(const gbwtgraph::CachedGBWTGraph& graph, const gbwt::SearchState& state, pos_t target, std::uint32_t parent) :
         parent(parent), target_offset(std::numeric_limits<std::uint32_t>::max()), dead_end(false)
     {
@@ -1625,7 +1628,7 @@ public:
         gbwt::SearchState state = this->graph.get_state(handle);
         WFANode root(this->graph, state, this->to, 0);
         root.update(WFANode::MATCHES, 0, 0, 0, offset(this->from) + 1);
-        this->nodes.push_back(root);
+        this->nodes.push_back(std::move(root));
 
         // Determine score bound based on the error model and sequence length.
         std::int32_t max_mismatches = error_model.mismatches.evaluate(sequence.length());

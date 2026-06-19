@@ -133,11 +133,15 @@ class hash_map : public google::dense_hash_map<K, V, wang_hash<K>>
 class hash_map : public spp::sparse_hash_map<K, V, wang_hash<K>>
 #endif
 {
-#ifdef USE_DENSE_HASH
 public:
+    hash_map(hash_map&&) noexcept = default;
+    hash_map& operator=(hash_map&&) noexcept = default;
+#ifdef USE_DENSE_HASH
     hash_map() {
         this->set_empty_key(-1);
     }
+#else
+    hash_map() = default;
 #endif
 };
 
@@ -163,11 +167,15 @@ class pair_hash_map : public google::dense_hash_map<K, V, wang_hash<K>>
 class pair_hash_map : public spp::sparse_hash_map<K, V, wang_hash<K>>
 #endif
 {
-#ifdef USE_DENSE_HASH
 public:
+    pair_hash_map(pair_hash_map&&) noexcept = default;
+    pair_hash_map& operator=(pair_hash_map&&) noexcept = default;
+#ifdef USE_DENSE_HASH
     pair_hash_map() {
         this->set_empty_key(K(-1, -1));
     }
+#else
+    pair_hash_map() = default;
 #endif
 };
 
@@ -196,11 +204,15 @@ class hash_set : public google::dense_hash_set<K, wang_hash<K>>
 class hash_set : public spp::sparse_hash_set<K, wang_hash<K>>
 #endif
     {
-#ifdef USE_DENSE_HASH
 public:
+    hash_set(hash_set&&) noexcept = default;
+    hash_set& operator=(hash_set&&) noexcept = default;
+#ifdef USE_DENSE_HASH
     hash_set() {
         this->set_empty_key(-1);
     }
+#else
+    hash_set() = default;
 #endif
 };
 
@@ -226,11 +238,15 @@ class pair_hash_set : public google::dense_hash_set<K, wang_hash<K>>
 class pair_hash_set : public spp::sparse_hash_set<K, wang_hash<K>>
 #endif
 {
-#ifdef USE_DENSE_HASH
 public:
+    pair_hash_set(pair_hash_set&&) noexcept = default;
+    pair_hash_set& operator=(pair_hash_set&&) noexcept = default;
+#ifdef USE_DENSE_HASH
     pair_hash_set() {
         this->set_empty_key(K(-1, -1));
     }
+#else
+    pair_hash_set() = default;
 #endif
 };
 
